@@ -35,6 +35,8 @@ class _BaseTestCase(unittest.TestCase):
     def setUp(self):
         self.env = EnvironmentStub(
                 enable=['trac.*', 'acct_mgr.api.*'])
+        self.env.config.set('trac', 'permission_policies',
+                            'DefaultPermissionPolicy')
         self.env.path = tempfile.mkdtemp()
         self.perm = PermissionSystem(self.env)
 
@@ -47,6 +49,7 @@ class _BaseTestCase(unittest.TestCase):
         self.req.perm = PermissionCache(self.env)
 
     def tearDown(self):
+        self.env.reset_db()
         shutil.rmtree(self.env.path)
 
 

@@ -21,6 +21,7 @@ from trac.web.main import RequestDispatcher
 from trac.web.session import Session
 
 from acct_mgr.api import AccountManager
+from acct_mgr.compat import get_read_db, with_transaction
 from acct_mgr.db import SessionStore
 
 
@@ -31,14 +32,13 @@ class _BaseTestCase(unittest.TestCase):
                         'acct_mgr.db.SessionStore', 'acct_mgr.pwhash.*',
                         'acct_mgr.htfile.HtDigestStore']
         )
+        self.env.config.set('trac', 'permission_policies',
+                            'DefaultPermissionPolicy')
         self.env.path = tempfile.mkdtemp()
         self.perm = PermissionSystem(self.env)
-        self.db = self.env.get_db_cnx()
 
     def tearDown(self):
-        self.db.close()
-        # Really close db connections.
-        self.env.shutdown()
+        self.env.reset_db()
         shutil.rmtree(self.env.path)
 
 
@@ -118,12 +118,17 @@ class AccountManagerTestCase(_BaseTestCase):
         self.env.config.set('account-manager', 'password_store',
                             'HtDigestStore, SessionStore')
         self.env.config.set('account-manager', 'htdigest_file', '.htdigest')
-        cursor = self.db.cursor()
-        cursor.execute("""
-            INSERT INTO session_attribute
-                   (sid,authenticated,name,value)
-            VALUES (%s,%s,%s,%s)
-        """, ('user', 1, 'password_refreshed', '1'))
+        db = get_read_db(self.env)
+        cursor = db.cursor()
+
+        @with_transaction(self.env)
+        def fn(db):
+            cursor = db.cursor()
+            cursor.execute("""
+                INSERT INTO session_attribute
+                       (sid,authenticated,name,value)
+                VALUES (%s,%s,%s,%s)
+            """, ('user', 1, 'password_refreshed', '1'))
 
         # Refresh not happening due to 'password_refreshed' attribute.
         self.mgr._maybe_update_hash('user', 'passwd')
@@ -136,13 +141,16 @@ class AccountManagerTestCase(_BaseTestCase):
         """)
         self.assertNotEqual(cursor.fetchall(), [])
 
-        cursor.execute("""
-            DELETE
-            FROM   session_attribute
-            WHERE  sid='user'
-            AND    authenticated=1
-            AND    name='password_refreshed'
-        """)
+        @with_transaction(self.env)
+        def fn(db):
+            cursor = db.cursor()
+            cursor.execute("""
+                DELETE
+                FROM   session_attribute
+                WHERE  sid='user'
+                AND    authenticated=1
+                AND    name='password_refreshed'
+            """)
         # Refresh (and effectively migrate) user credentials.
         self.mgr._maybe_update_hash('user', 'passwd')
         cursor.execute("""

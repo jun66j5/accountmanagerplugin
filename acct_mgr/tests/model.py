@@ -18,6 +18,7 @@ from Cookie  import SimpleCookie as Cookie
 from trac.test  import EnvironmentStub, Mock
 from trac.web.session  import Session
 
+from acct_mgr.compat import get_read_db, with_transaction
 from acct_mgr.model  import delete_user, email_associated, email_verified, \
                             del_user_attribute, get_user_attribute, \
                             set_user_attribute, last_seen, user_known, \
@@ -29,12 +30,9 @@ class ModelTestCase(unittest.TestCase):
     def setUp(self):
         self.env = EnvironmentStub(default_data=True, enable=['trac.*'])
         self.env.path = tempfile.mkdtemp()
-        self.db = self.env.get_db_cnx()
 
     def tearDown(self):
-        self.db.close()
-        # Really close db connections.
-        self.env.shutdown()
+        self.env.reset_db()
         shutil.rmtree(self.env.path)
 
     # Helpers
@@ -81,18 +79,20 @@ class ModelTestCase(unittest.TestCase):
 
     def test_get_user_attribute(self):
         self.assertEqual(get_user_attribute(self.env, authenticated=None), {})
-        cursor = self.db.cursor()
-        cursor.executemany("""
-            INSERT INTO session_attribute
-                   (sid,authenticated,name,value)
-            VALUES (%s,%s,%s,%s)
-        """, [
-        ('user', 0, 'attribute1', 'value1'),
-        ('user', 0, 'attribute2', 'value2'),
-        ('user', 1, 'attribute1', 'value1'),
-        ('user', 1, 'attribute2', 'value2'),
-        ('another', 1, 'attribute2', 'value3')]
-        )
+        @with_transaction(self.env)
+        def fn(db):
+            cursor = db.cursor()
+            cursor.executemany("""
+                INSERT INTO session_attribute
+                       (sid,authenticated,name,value)
+                VALUES (%s,%s,%s,%s)
+            """, [
+                ('user', 0, 'attribute1', 'value1'),
+                ('user', 0, 'attribute2', 'value2'),
+                ('user', 1, 'attribute1', 'value1'),
+                ('user', 1, 'attribute2', 'value2'),
+                ('another', 1, 'attribute2', 'value3')]
+            )
         no_constraints = get_user_attribute(self.env, authenticated=None)
         # Distinct session IDs form top-level keys.
         self.assertEqual(set(no_constraints.keys()),
@@ -112,7 +112,8 @@ class ModelTestCase(unittest.TestCase):
 
     def test_set_user_attribute(self):
         set_user_attribute(self.env, 'user', 'attribute1', 'value1')
-        cursor = self.db.cursor()
+        db = get_read_db(self.env)
+        cursor = db.cursor()
         cursor.execute("""
             SELECT name,value
             FROM   session_attribute

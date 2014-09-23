@@ -16,7 +16,9 @@ import unittest
 
 from trac.test import EnvironmentStub, Mock
 
+from acct_mgr.compat import get_read_db, with_transaction
 from acct_mgr.db import SessionStore
+
 
 class _BaseTestCase(unittest.TestCase):
     def setUp(self):
@@ -28,24 +30,29 @@ class _BaseTestCase(unittest.TestCase):
         #self.env.path = os.path.join(self.basedir, 'trac-tempenv')
         #os.mkdir(self.env.path)
 
+    def tearDown(self):
+        self.env.reset_db()
+
     def test_get_users(self):
-        db = self.env.get_db_cnx()
-        cursor = db.cursor()
-        cursor.executemany("INSERT INTO session_attribute "
-                       "(sid,authenticated,name,value) "
-                       "VALUES (%s,1,'password',%s)",
-                       [('a', 'a'),
-                        ('b', 'b'),
-                        ('c', 'c')])
+        @with_transaction(self.env)
+        def fn(db):
+            cursor = db.cursor()
+            cursor.executemany("INSERT INTO session_attribute "
+                           "(sid,authenticated,name,value) "
+                           "VALUES (%s,1,'password',%s)",
+                           [('a', 'a'),
+                            ('b', 'b'),
+                            ('c', 'c')])
         self.assertEqual(set(['a', 'b', 'c']), set(self.store.get_users()))
 
     def test_has_user(self):
-        db = self.env.get_db_cnx()
-        cursor = db.cursor()
-        cursor.execute("INSERT INTO session_attribute "
-                       "(sid,authenticated,name,value) "
-                       "VALUES (%s,1,'password',%s)",
-                       ('bar', 'bar'))
+        @with_transaction(self.env)
+        def fn(db):
+            cursor = db.cursor()
+            cursor.execute("INSERT INTO session_attribute "
+                           "(sid,authenticated,name,value) "
+                           "VALUES (%s,1,'password',%s)",
+                           ('bar', 'bar'))
 
         self.assertFalse(self.store.has_user('foo'))
         self.assertTrue(self.store.has_user('bar'))

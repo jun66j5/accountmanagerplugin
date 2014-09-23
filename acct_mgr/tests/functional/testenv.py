@@ -9,6 +9,7 @@
 # Author: Pedro Algarvio <ufs@ufsoft.org>
 
 import os
+import pkg_resources
 import sys
 import time
 
@@ -22,13 +23,15 @@ from trac.tests.functional.compat import rmtree, close_fds
 from trac.tests.functional.testenv import FunctionalTestEnvironment
 from trac.tests.notification import SMTPThreadedServer
 
-from acct_mgr.pwhash import htpasswd
+from acct_mgr.pwhash import mkhtpasswd
 from acct_mgr.tests.functional import logfile
 from acct_mgr.tests.functional import tc, ConnectError
 from acct_mgr.tests.functional.smtpd import AcctMgrSMTPThreadedServer
 
 class AcctMgrFuntionalTestEnvironment(FunctionalTestEnvironment):
-    
+
+    trac_src = pkg_resources.get_distribution('Trac').location
+
     def __init__(self, dirname, port, url):
         FunctionalTestEnvironment.__init__(self, dirname, port, url)
         self.smtp_port = self.port + os.getpid() % 1000
@@ -86,32 +89,11 @@ class AcctMgrFuntionalTestEnvironment(FunctionalTestEnvironment):
     def stop(self):
         FunctionalTestEnvironment.stop(self)
         self.smtpd.stop()
-        
-    def create(self):
-        """Create a new test environment; Trac, Subversion,
-        authentication."""
-        if os.mkdir(self.dirname):
-            raise Exception('unable to create test environment')
-        if call(["svnadmin", "create", self.repodir], stdout=logfile,
-                stderr=logfile, close_fds=close_fds):
-            raise Exception('unable to create subversion repository')
-        self._tracadmin('initenv', 'testenv%s' % self.port,
-                        'sqlite:db/trac.db', 'svn', self.repodir)
-        
-        if os.path.exists(self.htpasswd):
-            os.unlink(self.htpasswd)
-        self.adduser('admin')        
-        self.adduser('user')
-        self._tracadmin('permission', 'add', 'admin', 'TRAC_ADMIN')
-        # Setup Trac logging
-        env = self.get_trac_environment()
-        env.config.set('logging', 'log_type', 'file')
-        env.config.save()
 
     def adduser(self, user):
         """Add a user to the environment.  Password is the username."""
         f = open(self.htpasswd, 'a')
-        f.write("%s:%s\n" % (user, htpasswd(user)))
+        f.write("%s:%s\n" % (user, mkhtpasswd(user)))
         f.close()
         
     def _tracadmin(self, *args):

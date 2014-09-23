@@ -73,6 +73,7 @@ class _BaseTestCase(unittest.TestCase):
         self.acctmgr = AccountManager(self.env)
 
     def tearDown(self):
+        self.env.reset_db()
         shutil.rmtree(self.env.path)
 
 
