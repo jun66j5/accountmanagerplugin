@@ -24,6 +24,7 @@ from acct_mgr.api import AccountManager, IAccountRegistrationInspector
 from acct_mgr.db import SessionStore
 from acct_mgr.htfile import HtPasswdStore
 from acct_mgr.model import set_user_attribute
+from acct_mgr.pwhash import HtDigestHashMethod
 from acct_mgr.register import BasicCheck, BotTrapCheck, EmailCheck
 from acct_mgr.register import EmailVerificationModule
 from acct_mgr.register import GenericRegistrationInspector, RegExpCheck
@@ -104,6 +105,7 @@ class BasicCheckTestCase(_BaseTestCase):
         _BaseTestCase.setUp(self)
         self.env = EnvironmentStub(
                 enable=['trac.*', 'acct_mgr.admin.*',
+                        'acct_mgr.db.SessionStore',
                         'acct_mgr.pwhash.HtDigestHashMethod'])
         self.env.path = tempfile.mkdtemp()
         self.env.config.set('account-manager', 'password_store',
@@ -208,7 +210,8 @@ class EmailCheckTestCase(_BaseTestCase):
     def test_verify_conf_changes(self):
         """Registration challenges with EmailVerificationModule enabled."""
         self.env = EnvironmentStub(
-                enable=['trac.*', 'acct_mgr.admin.*', 'acct_mgr.register.*'])
+                enable=['trac.*', 'acct_mgr.admin.*', 'acct_mgr.register.*',
+                        'acct_mgr.pwhash.HtDigestHashMethod'])
         self.env.path = tempfile.mkdtemp()
         set_user_attribute(self.env, 'admin', 'email', 'admin@foo.bar')
 
@@ -313,8 +316,8 @@ class RegistrationModuleTestCase(_BaseTestCase):
         self.env = EnvironmentStub(enable=[
                        'trac.*', 'acct_mgr.api.*', 'acct_mgr.db.*',
                        'acct_mgr.register.*',
-                       'acct_mgr.pwhash.HtDigestHashMethod'
-                   ])
+                       'acct_mgr.db.SessionStore',
+                       'acct_mgr.pwhash.HtDigestHashMethod'])
         self.env.path = tempfile.mkdtemp()
         self.reg_template = 'register.html'
         self.req.method = 'POST'
